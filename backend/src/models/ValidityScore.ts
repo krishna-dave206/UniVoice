@@ -1,62 +1,52 @@
-export interface IValidityScore {
-  scoreId: string;
-  postId: string;       // FK → Post.postId
-  score: number;        // 0.0 – 1.0  (upvotes / total votes)
-  totalVotes: number;
-  upvotes: number;
-  downvotes: number;
+import mongoose, { Schema, Document, Model } from "mongoose";
+
+export interface IValidityScore extends Document {
+  postId:       mongoose.Types.ObjectId;
+  score:        number;   // 0.0 – 1.0
+  totalVotes:   number;
+  upvotes:      number;
+  downvotes:    number;
   calculatedAt: Date;
 }
 
-export class ValidityScore implements IValidityScore {
-  scoreId: string;
-  postId: string;
-  score: number;
-  totalVotes: number;
-  upvotes: number;
-  downvotes: number;
-  calculatedAt: Date;
+const ValidityScoreSchema = new Schema<IValidityScore>(
+  {
+    postId: {
+      type: Schema.Types.ObjectId,
+      ref: "Post",
+      required: true,
+      unique: true,   // one score doc per post
+    },
+    score: {
+      type: Number,
+      default: 0,
+      min: 0,
+      max: 1,
+    },
+    totalVotes: { type: Number, default: 0 },
+    upvotes:    { type: Number, default: 0 },
+    downvotes:  { type: Number, default: 0 },
+    calculatedAt: {
+      type: Date,
+      default: Date.now,
+    },
+  },
+  { timestamps: false }
+);
 
-  constructor(postId: string, upvotes: number, downvotes: number) {
-    this.scoreId = crypto.randomUUID();
-    this.postId = postId;
-    this.upvotes = upvotes;
-    this.downvotes = downvotes;
-    this.totalVotes = upvotes + downvotes;
-    this.score = this.calculate(upvotes, downvotes);
-    this.calculatedAt = new Date();
-  }
+// Static helper to recalculate and save score
+ValidityScoreSchema.methods.recalculate = async function (
+  upvotes: number,
+  downvotes: number
+): Promise<void> {
+  const total = upvotes + downvotes;
+  this.upvotes    = upvotes;
+  this.downvotes  = downvotes;
+  this.totalVotes = total;
+  this.score      = total === 0 ? 0 : parseFloat((upvotes / total).toFixed(4));
+  this.calculatedAt = new Date();
+  await this.save();
+};
 
-  // Wilson score lower bound — a fairer metric than raw ratio
-  // Falls back to simple ratio for small vote counts
-  private calculate(up: number, down: number): number {
-    const total = up + down;
-    if (total === 0) return 0;
-    return parseFloat((up / total).toFixed(4));
-  }
-
-  recalculate(upvotes: number, downvotes: number): void {
-    this.upvotes = upvotes;
-    this.downvotes = downvotes;
-    this.totalVotes = upvotes + downvotes;
-    this.score = this.calculate(upvotes, downvotes);
-    this.calculatedAt = new Date();
-  }
-
-  // Returns score as a percentage string e.g. "73.5%"
-  toPercent(): string {
-    return `${(this.score * 100).toFixed(1)}%`;
-  }
-
-  toJSON(): IValidityScore {
-    return {
-      scoreId: this.scoreId,
-      postId: this.postId,
-      score: this.score,
-      totalVotes: this.totalVotes,
-      upvotes: this.upvotes,
-      downvotes: this.downvotes,
-      calculatedAt: this.calculatedAt,
-    };
-  }
-}
+export const ValidityScoreModel: Model<IValidityScore> =
+  mongoose.model<IValidityScore>("ValidityScore", ValidityScoreSchema);

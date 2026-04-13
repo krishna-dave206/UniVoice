@@ -1,9 +1,6 @@
-import { Post, IPost, PostStatus, PostPriority } from "../models/Post";
-import { ValidityScore } from "../models/ValidityScore";
-
-// In a real app this would talk to a DB (Prisma / pg).
-// For now it's an in-memory store so the class structure is demonstrable.
-// Swap the store calls with DB queries when Neeraj's db.ts is ready.
+import { PostModel, IPost, PostStatus, PostPriority } from "../models/Post";
+import { ValidityScoreModel } from "../models/ValidityScore";
+import mongoose from "mongoose";
 
 interface CreatePostDTO {
   userId: string;
@@ -16,169 +13,167 @@ interface CreatePostDTO {
 }
 
 interface UpdatePostDTO {
-  title?: string;
-  body?: string;
+  title?:    string;
+  body?:     string;
   category?: string;
   priority?: PostPriority;
-  tags?: string[];
+  tags?:     string[];
 }
 
-// In-memory store (replace with DB later)
-const postStore = new Map<string, Post>();
-const validityStore = new Map<string, ValidityScore>(); // postId → score
-const voteTracker = new Map<string, Set<string>>();     // postId → Set<userId>
+const voteTracker = new Map<string, Set<string>>(); 
 
 export class PostService {
 
-  // ─── CREATE ────────────────────────────────────────────────────────────────
+  // CREATE
 
-  createPost(dto: CreatePostDTO): Post {
-    const post = new Post({
-      userId: dto.userId,
-      title: dto.title,
-      body: dto.body,
-      category: dto.category,
-      priority: dto.priority ?? PostPriority.MEDIUM,
-      tags: dto.tags ?? [],
+  async createPost(dto: CreatePostDTO): Promise<IPost> {
+    const post = await PostModel.create({
+      userId:      new mongoose.Types.ObjectId(dto.userId),
+      title:       dto.title,
+      body:        dto.body,
+      category:    dto.category,
+      priority:    dto.priority ?? PostPriority.MEDIUM,
+      tags:        dto.tags ?? [],
       isAnonymous: dto.isAnonymous ?? false,
+      status:      PostStatus.OPEN,
     });
 
-    // initialise a blank validity score for this post
-    const vs = new ValidityScore(post.postId, 0, 0);
-    post.validityScore = vs.scoreId;
-
-    postStore.set(post.postId, post);
-    validityStore.set(post.postId, vs);
-    voteTracker.set(post.postId, new Set());
+    // Create a blank validity score document linked to this post
+    await ValidityScoreModel.create({ postId: post._id });
 
     return post;
   }
 
-  // ─── READ ──────────────────────────────────────────────────────────────────
+  // READ
 
-  getPostById(postId: string): Post {
-    const post = postStore.get(postId);
+  async getPostById(postId: string): Promise<IPost> {
+    const post = await PostModel.findById(postId);
     if (!post) throw new Error(`Post ${postId} not found`);
     return post;
   }
 
-  getAllPosts(): Post[] {
-    return Array.from(postStore.values()).sort(
-      (a, b) => b.createdAt.getTime() - a.createdAt.getTime()
-    );
+  async getAllPosts(): Promise<IPost[]> {
+    return PostModel.find().sort({ createdAt: -1 });
   }
 
-  getPostsByUser(userId: string): Post[] {
-    return this.getAllPosts().filter((p) => p.userId === userId);
+  async getPostsByUser(userId: string): Promise<IPost[]> {
+    return PostModel.find({ userId }).sort({ createdAt: -1 });
   }
 
-  getPostsByCategory(category: string): Post[] {
-    return this.getAllPosts().filter(
-      (p) => p.category.toLowerCase() === category.toLowerCase()
-    );
+  async getPostsByCategory(category: string): Promise<IPost[]> {
+    return PostModel.find({ category: new RegExp(`^${category}$`, "i") });
   }
 
-  getPostsByStatus(status: PostStatus): Post[] {
-    return this.getAllPosts().filter((p) => p.status === status);
+  async getPostsByStatus(status: PostStatus): Promise<IPost[]> {
+    return PostModel.find({ status });
   }
 
-  getValidityScore(postId: string): ValidityScore | undefined {
-    return validityStore.get(postId);
+  async getValidityScore(postId: string) {
+    return ValidityScoreModel.findOne({ postId });
   }
 
-  // ─── UPDATE ────────────────────────────────────────────────────────────────
+  // UPDATE
 
-  updatePost(postId: string, dto: UpdatePostDTO, requestingUserId: string): Post {
-    const post = this.getPostById(postId);
+  async updatePost(postId: string, dto: UpdatePostDTO, requestingUserId: string): Promise<IPost> {
+    const post = await this.getPostById(postId);
 
-    // only the author can edit their own post
-    if (post.userId !== requestingUserId) {
+    if (post.userId.toString() !== requestingUserId) {
       throw new Error("Unauthorized: you can only edit your own posts");
     }
 
-    if (dto.title) post.title = dto.title;
-    if (dto.body !== undefined) post.body = dto.body;
-    if (dto.category) post.category = dto.category;
-    if (dto.priority) post.priority = dto.priority;
-    if (dto.tags) post.tags = dto.tags;
-    post.touch();
+    const updated = await PostModel.findByIdAndUpdate(
+      postId,
+      { $set: dto },
+      { new: true, runValidators: true }
+    );
 
-    postStore.set(postId, post);
-    return post;
+    if (!updated) throw new Error(`Post ${postId} not found`);
+    return updated;
   }
 
-  changeStatus(postId: string, newStatus: PostStatus): Post {
-    const post = this.getPostById(postId);
-    post.changeStatus(newStatus);
-    postStore.set(postId, post);
-    return post;
+  async changeStatus(postId: string, newStatus: PostStatus): Promise<IPost> {
+    const updated = await PostModel.findByIdAndUpdate(
+      postId,
+      { $set: { status: newStatus } },
+      { new: true }
+    );
+    if (!updated) throw new Error(`Post ${postId} not found`);
+    return updated;
   }
 
-  assignPost(postId: string, staffId: string): Post {
-    const post = this.getPostById(postId);
-    post.assign(staffId);
-    postStore.set(postId, post);
-    return post;
+  async assignPost(postId: string, staffId: string): Promise<IPost> {
+    const updated = await PostModel.findByIdAndUpdate(
+      postId,
+      {
+        $set: {
+          assignedTo: new mongoose.Types.ObjectId(staffId),
+          status: PostStatus.IN_PROGRESS,
+        },
+      },
+      { new: true }
+    );
+    if (!updated) throw new Error(`Post ${postId} not found`);
+    return updated;
   }
 
-  // ─── VOTES ─────────────────────────────────────────────────────────────────
+  // VOTES 
 
-  upvote(postId: string, userId: string): { post: Post; validityScore: ValidityScore } {
-    const post = this.getPostById(postId);
-    const voters = voteTracker.get(postId) ?? new Set();
+  async upvote(postId: string, userId: string) {
+    const voters = voteTracker.get(postId) ?? new Set<string>();
+    if (voters.has(userId)) throw new Error("You have already voted on this post");
 
-    if (voters.has(userId)) {
-      throw new Error("You have already voted on this post");
-    }
+    const post = await PostModel.findByIdAndUpdate(
+      postId,
+      { $inc: { upvotes: 1 } },
+      { new: true }
+    );
+    if (!post) throw new Error(`Post ${postId} not found`);
 
-    post.upvote();
     voters.add(userId);
     voteTracker.set(postId, voters);
-    postStore.set(postId, post);
 
-    const vs = this.refreshValidityScore(post);
+    const vs = await this.refreshValidityScore(post);
     return { post, validityScore: vs };
   }
 
-  downvote(postId: string, userId: string): { post: Post; validityScore: ValidityScore } {
-    const post = this.getPostById(postId);
-    const voters = voteTracker.get(postId) ?? new Set();
+  async downvote(postId: string, userId: string) {
+    const voters = voteTracker.get(postId) ?? new Set<string>();
+    if (voters.has(userId)) throw new Error("You have already voted on this post");
 
-    if (voters.has(userId)) {
-      throw new Error("You have already voted on this post");
-    }
+    const post = await PostModel.findByIdAndUpdate(
+      postId,
+      { $inc: { downvotes: 1 } },
+      { new: true }
+    );
+    if (!post) throw new Error(`Post ${postId} not found`);
 
-    post.downvote();
     voters.add(userId);
     voteTracker.set(postId, voters);
-    postStore.set(postId, post);
 
-    const vs = this.refreshValidityScore(post);
+    const vs = await this.refreshValidityScore(post);
     return { post, validityScore: vs };
   }
 
-  private refreshValidityScore(post: Post): ValidityScore {
-    const vs = validityStore.get(post.postId);
+  private async refreshValidityScore(post: IPost) {
+    const vs = await ValidityScoreModel.findOne({ postId: post._id });
     if (!vs) throw new Error("ValidityScore not found for post");
-    vs.recalculate(post.upvotes, post.downvotes);
-    validityStore.set(post.postId, vs);
+    await vs.recalculate(post.upvotes, post.downvotes);
     return vs;
   }
 
-  // ─── DELETE ────────────────────────────────────────────────────────────────
+  // DELETE 
 
-  deletePost(postId: string, requestingUserId: string, isAdmin: boolean): void {
-    const post = this.getPostById(postId);
+  async deletePost(postId: string, requestingUserId: string, isAdmin: boolean): Promise<void> {
+    const post = await this.getPostById(postId);
 
-    if (!isAdmin && post.userId !== requestingUserId) {
+    if (!isAdmin && post.userId.toString() !== requestingUserId) {
       throw new Error("Unauthorized: cannot delete another user's post");
     }
 
-    postStore.delete(postId);
-    validityStore.delete(postId);
+    await PostModel.findByIdAndDelete(postId);
+    await ValidityScoreModel.deleteOne({ postId });
     voteTracker.delete(postId);
   }
 }
 
-// Export a singleton so all routes share the same in-memory state
 export const postService = new PostService();
