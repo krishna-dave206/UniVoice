@@ -1,6 +1,6 @@
-
 import { useState } from "react";
-import { PostPriority } from "../types";
+import type { PostPriority } from "../types";
+import { postsApi } from "../services/api";
 
 interface PostFormProps {
   userId: string;
@@ -23,64 +23,67 @@ export default function PostForm({ userId, onSuccess, onCancel }: PostFormProps)
 
   const addTag = () => {
     const t = tagInput.trim().toLowerCase().replace(/\s+/g, "-");
-    if (t && !tags.includes(t) && tags.length < 5) {
-      setTags((prev) => [...prev, t]);
-    }
+    if (t && !tags.includes(t) && tags.length < 5) setTags((prev) => [...prev, t]);
     setTagInput("");
   };
-
   const removeTag = (tag: string) => setTags((prev) => prev.filter((t) => t !== tag));
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
-
     if (!title.trim()) return setError("Title is required");
     if (!category) return setError("Please select a category");
 
     setLoading(true);
     try {
-      const res = await fetch("http://localhost:3000/api/posts", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId, title, body, category, priority, tags, isAnonymous }),
-      });
-
-      const data = await res.json();
-      if (!data.success) return setError(data.message);
+      const data = await postsApi.create({ userId, title, body, category, priority, tags, isAnonymous });
+      if (!data.success) { setError(data.message ?? "Failed to create post"); return; }
       onSuccess();
     } catch {
-      setError("Could not connect to server.");
+      setError("Could not connect to server. Is the backend running?");
     } finally {
       setLoading(false);
     }
   };
 
-  const inputStyle = { width: "100%", padding: "10px 12px", borderRadius: 8, border: "0.5px solid var(--color-border-secondary)", fontSize: 14, boxSizing: "border-box" as const };
+  const inputStyle: React.CSSProperties = {
+    width: "100%", padding: "10px 12px", borderRadius: 8,
+    border: "1px solid var(--border)", fontSize: 14,
+    boxSizing: "border-box", background: "var(--surface)", color: "var(--text-primary)",
+  };
+  const label: React.CSSProperties = { display: "block", fontSize: 13, marginBottom: 6, color: "var(--text-secondary)" };
 
   return (
-    <div style={{ maxWidth: 640, margin: "0 auto" }}>
+    <div className="card" style={{ maxWidth: 660, margin: "0 auto" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 24 }}>
-        <h2 style={{ fontSize: 18, fontWeight: 500, margin: 0 }}>Create a new post</h2>
+        <h2 style={{ fontSize: 20, fontWeight: 700, margin: 0 }}>Create a new post</h2>
         {onCancel && (
-          <button onClick={onCancel} style={{ background: "none", border: "none", fontSize: 13, color: "var(--color-text-secondary)", cursor: "pointer" }}>Cancel</button>
+          <button onClick={onCancel} className="btn-ghost">Cancel</button>
         )}
       </div>
 
-      <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 18 }}>
         {/* Title */}
         <div>
-          <label style={{ display: "block", fontSize: 13, marginBottom: 6, color: "var(--color-text-secondary)" }}>
+          <label style={label}>
             Title <span style={{ color: "#E24B4A" }}>*</span>
           </label>
-          <input style={inputStyle} value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Briefly describe the issue" maxLength={120} />
-          <div style={{ fontSize: 11, color: "var(--color-text-tertiary)", marginTop: 4, textAlign: "right" }}>{title.length}/120</div>
+          <input
+            style={inputStyle}
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="Briefly describe the issue"
+            maxLength={120}
+          />
+          <div className="subtle-text" style={{ fontSize: 11, marginTop: 4, textAlign: "right" }}>
+            {title.length}/120
+          </div>
         </div>
 
         {/* Body */}
         <div>
-          <label style={{ display: "block", fontSize: 13, marginBottom: 6, color: "var(--color-text-secondary)" }}>
-            Description <span style={{ fontSize: 11 }}>(optional)</span>
+          <label style={label}>
+            Description <span className="subtle-text" style={{ fontSize: 11 }}>(optional)</span>
           </label>
           <textarea
             style={{ ...inputStyle, resize: "vertical" }}
@@ -94,7 +97,7 @@ export default function PostForm({ userId, onSuccess, onCancel }: PostFormProps)
         {/* Category + Priority */}
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
           <div>
-            <label style={{ display: "block", fontSize: 13, marginBottom: 6, color: "var(--color-text-secondary)" }}>
+            <label style={label}>
               Category <span style={{ color: "#E24B4A" }}>*</span>
             </label>
             <select style={inputStyle} value={category} onChange={(e) => setCategory(e.target.value)}>
@@ -103,7 +106,7 @@ export default function PostForm({ userId, onSuccess, onCancel }: PostFormProps)
             </select>
           </div>
           <div>
-            <label style={{ display: "block", fontSize: 13, marginBottom: 6, color: "var(--color-text-secondary)" }}>Priority</label>
+            <label style={label}>Priority</label>
             <select style={inputStyle} value={priority} onChange={(e) => setPriority(e.target.value as PostPriority)}>
               <option value="low">Low</option>
               <option value="medium">Medium</option>
@@ -114,7 +117,7 @@ export default function PostForm({ userId, onSuccess, onCancel }: PostFormProps)
 
         {/* Tags */}
         <div>
-          <label style={{ display: "block", fontSize: 13, marginBottom: 6, color: "var(--color-text-secondary)" }}>Tags (up to 5)</label>
+          <label style={label}>Tags (up to 5)</label>
           <div style={{ display: "flex", gap: 8 }}>
             <input
               style={{ ...inputStyle, flex: 1 }}
@@ -123,16 +126,33 @@ export default function PostForm({ userId, onSuccess, onCancel }: PostFormProps)
               onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addTag())}
               placeholder="e.g. wifi, canteen"
             />
-            <button type="button" onClick={addTag} style={{ padding: "10px 14px", borderRadius: 8, border: "0.5px solid var(--color-border-secondary)", background: "none", cursor: "pointer", fontSize: 13, color: "var(--color-text-secondary)" }}>
+            <button
+              type="button"
+              onClick={addTag}
+              className="btn-ghost"
+            >
               Add
             </button>
           </div>
           {tags.length > 0 && (
-            <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 8 }}>
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 10 }}>
               {tags.map((tag) => (
-                <span key={tag} style={{ fontSize: 12, padding: "3px 10px", borderRadius: 20, background: "var(--color-background-secondary)", border: "0.5px solid var(--color-border-secondary)", display: "flex", alignItems: "center", gap: 6 }}>
+                <span
+                  key={tag}
+                  style={{
+                    fontSize: 12, padding: "3px 10px", borderRadius: 20,
+                    background: "var(--surface-hover)", border: "1px solid var(--border)",
+                    display: "flex", alignItems: "center", gap: 6,
+                  }}
+                >
                   #{tag}
-                  <button onClick={() => removeTag(tag)} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--color-text-tertiary)", fontSize: 14, lineHeight: 1, padding: 0 }}>×</button>
+                  <button
+                    type="button"
+                    onClick={() => removeTag(tag)}
+                    style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-tertiary)", fontSize: 14, lineHeight: 1, padding: 0 }}
+                  >
+                    ×
+                  </button>
                 </span>
               ))}
             </div>
@@ -140,21 +160,23 @@ export default function PostForm({ userId, onSuccess, onCancel }: PostFormProps)
         </div>
 
         {/* Anonymous toggle */}
-        <label style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", fontSize: 13, color: "var(--color-text-secondary)" }}>
-          <input type="checkbox" checked={isAnonymous} onChange={(e) => setIsAnonymous(e.target.checked)} style={{ width: 16, height: 16 }} />
+        <label style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", fontSize: 13, color: "var(--text-secondary)" }}>
+          <input
+            type="checkbox"
+            checked={isAnonymous}
+            onChange={(e) => setIsAnonymous(e.target.checked)}
+            style={{ width: 16, height: 16 }}
+          />
           Submit anonymously (your name won't be shown)
         </label>
 
-        {error && (
-          <div style={{ padding: "10px 12px", background: "#FCEBEB", color: "#791F1F", borderRadius: 8, fontSize: 13 }}>
-            {error}
-          </div>
-        )}
+        {error && <div className="alert alert-error">{error}</div>}
 
         <button
           type="submit"
           disabled={loading}
-          style={{ padding: "12px", background: "#534AB7", color: "#fff", border: "none", borderRadius: 8, fontSize: 14, fontWeight: 500, cursor: loading ? "not-allowed" : "pointer", opacity: loading ? 0.7 : 1 }}
+          className="btn-primary"
+          style={{ padding: "13px", fontSize: 14 }}
         >
           {loading ? "Submitting..." : "Submit post"}
         </button>

@@ -1,6 +1,3 @@
-// Shared TypeScript types used across frontend components.
-// These mirror the backend models — keep in sync with backend/src/models/
-
 export type UserRole = "student" | "faculty" | "admin";
 
 export type PostStatus =
@@ -13,8 +10,8 @@ export type PostStatus =
 
 export type PostPriority = "low" | "medium" | "high";
 
-export interface User {
-  userId: string;
+export interface AuthUser {
+  _id: string;
   name: string;
   email: string;
   role: UserRole;
@@ -24,7 +21,22 @@ export interface User {
   createdAt: string;
 }
 
+export interface User extends AuthUser {
+  userId: string;
+}
+
+export interface ValidityScore {
+  _id?: string;
+  postId: string;
+  score: number;      
+  totalVotes: number;
+  upvotes: number;
+  downvotes: number;
+  calculatedAt: string;
+}
+
 export interface Post {
+  _id: string;
   postId: string;
   userId: string;
   assignedTo?: string;
@@ -36,37 +48,32 @@ export interface Post {
   tags: string[];
   upvotes: number;
   downvotes: number;
-  validityScore?: string;
   validityScoreData?: ValidityScore;
   isAnonymous: boolean;
   createdAt: string;
   updatedAt: string;
 }
 
-export interface ValidityScore {
-  scoreId: string;
-  postId: string;
-  score: number;         // 0.0 – 1.0
-  totalVotes: number;
-  upvotes: number;
-  downvotes: number;
-  calculatedAt: string;
-}
-
 export interface Comment {
+  _id: string;
+  /** Alias */
   commentId: string;
-  complaintId: string;   // FK → Post.postId  (named per whiteboard)
+  complaintId: string;
   userId: string;
   body: string;
+  isInternal?: boolean;
   createdAt: string;
   updatedAt: string;
 }
 
 export interface Announcement {
+  _id: string;
+  /** Alias */
   announcementId: string;
   userId: string;
   title: string;
   body: string;
+  isPinned: boolean;
   createdAt: string;
   updatedAt: string;
 }

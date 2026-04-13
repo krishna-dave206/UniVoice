@@ -1,7 +1,7 @@
-
 import { useState, useEffect } from "react";
-import { Post, PostStatus } from "../types";
+import type { Post } from "../types";
 import PostCard from "./PostCard";
+import { postsApi, normaliseDoc } from "../services/api";
 
 interface PostFeedProps {
   onPostClick: (postId: string) => void;
@@ -31,35 +31,42 @@ export default function PostFeed({ onPostClick, currentUserId }: PostFeedProps) 
 
   const fetchPosts = async () => {
     setLoading(true);
-    try {
-      const params = new URLSearchParams();
-      if (category !== "All") params.set("category", category);
-      if (status) params.set("status", status);
-
-      const res = await fetch(`http://localhost:3000/api/posts?${params}`);
-      const data = await res.json();
-      if (data.success) setPosts(data.data);
-    } finally {
-      setLoading(false);
+    const params: Record<string, string> = {};
+    if (category !== "All") params.category = category;
+    if (status) params.status = status;
+    const res = await postsApi.getAll(params);
+    if (res.success && Array.isArray(res.data)) {
+      setPosts(
+        (res.data as Record<string, unknown>[]).map((p) =>
+          normaliseDoc(p, "postId") as unknown as Post
+        )
+      );
     }
+    setLoading(false);
   };
 
   const handleVote = async (postId: string, type: "upvote" | "downvote") => {
-    try {
-      const res = await fetch(`http://localhost:3000/api/posts/${postId}/${type}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId: currentUserId }),
-      });
-      const data = await res.json();
-      if (data.success) {
-        setPosts((prev) => prev.map((p) => p.postId === postId ? { ...p, ...data.data.post } : p));
+    const fn = type === "upvote" ? postsApi.upvote : postsApi.downvote;
+    const res = await fn(postId, currentUserId);
+    if (res.success && res.data) {
+      const updated = (res.data as Record<string, unknown>).post as Record<string, unknown>;
+      if (updated) {
+        setPosts((prev) =>
+          prev.map((p) =>
+            p._id === postId || p.postId === postId
+              ? { ...p, ...(normaliseDoc(updated, "postId") as unknown as Post) }
+              : p
+          )
+        );
       }
-    } catch {}
+    }
   };
 
   const filtered = posts.filter((p) =>
-    search ? p.title.toLowerCase().includes(search.toLowerCase()) || p.body?.toLowerCase().includes(search.toLowerCase()) : true
+    search
+      ? p.title.toLowerCase().includes(search.toLowerCase()) ||
+        p.body?.toLowerCase().includes(search.toLowerCase())
+      : true
   );
 
   return (
@@ -70,7 +77,11 @@ export default function PostFeed({ onPostClick, currentUserId }: PostFeedProps) 
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search posts..."
-          style={{ width: "100%", padding: "10px 14px", borderRadius: 8, border: "0.5px solid var(--color-border-secondary)", fontSize: 14, boxSizing: "border-box" }}
+          style={{
+            width: "100%", padding: "10px 14px", borderRadius: 8,
+            border: "1px solid var(--border)", fontSize: 14, boxSizing: "border-box",
+            background: "var(--surface)", color: "var(--text-primary)",
+          }}
         />
 
         {/* Category filter */}
@@ -79,12 +90,7 @@ export default function PostFeed({ onPostClick, currentUserId }: PostFeedProps) 
             <button
               key={cat}
               onClick={() => setCategory(cat)}
-              style={{
-                padding: "5px 12px", borderRadius: 20, fontSize: 12, cursor: "pointer", border: "0.5px solid",
-                background: category === cat ? "#534AB7" : "transparent",
-                color: category === cat ? "#fff" : "var(--color-text-secondary)",
-                borderColor: category === cat ? "#534AB7" : "var(--color-border-secondary)",
-              }}
+              className={category === cat ? "chip chip-active" : "chip"}
             >
               {cat}
             </button>
@@ -97,13 +103,7 @@ export default function PostFeed({ onPostClick, currentUserId }: PostFeedProps) 
             <button
               key={s.value}
               onClick={() => setStatus(s.value)}
-              style={{
-                padding: "4px 10px", borderRadius: 6, fontSize: 11, cursor: "pointer", border: "0.5px solid",
-                background: status === s.value ? "var(--color-background-secondary)" : "transparent",
-                color: "var(--color-text-secondary)",
-                borderColor: status === s.value ? "var(--color-border-primary)" : "var(--color-border-tertiary)",
-                fontWeight: status === s.value ? 500 : 400,
-              }}
+              className={status === s.value ? "chip-sm chip-sm-active" : "chip-sm"}
             >
               {s.label}
             </button>
@@ -112,7 +112,7 @@ export default function PostFeed({ onPostClick, currentUserId }: PostFeedProps) 
       </div>
 
       {/* Post count */}
-      <p style={{ fontSize: 12, color: "var(--color-text-tertiary)", marginBottom: 14 }}>
+      <p className="subtle-text" style={{ marginBottom: 14 }}>
         {loading ? "Loading..." : `${filtered.length} post${filtered.length !== 1 ? "s" : ""}`}
       </p>
 
@@ -120,19 +120,20 @@ export default function PostFeed({ onPostClick, currentUserId }: PostFeedProps) 
       {loading ? (
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
           {[1, 2, 3].map((i) => (
-            <div key={i} style={{ height: 120, borderRadius: 12, background: "var(--color-background-secondary)", animation: "pulse 1.5s ease-in-out infinite" }} />
+            <div key={i} className="skeleton" style={{ height: 130, borderRadius: 12 }} />
           ))}
         </div>
       ) : filtered.length === 0 ? (
-        <div style={{ textAlign: "center", padding: "60px 20px", color: "var(--color-text-secondary)" }}>
-          <p style={{ fontSize: 15 }}>No posts found.</p>
-          <p style={{ fontSize: 13 }}>Try adjusting the filters or create a new post.</p>
+        <div className="empty-state">
+          <div className="empty-icon">📭</div>
+          <p style={{ fontSize: 15, fontWeight: 500 }}>No posts found</p>
+          <p className="subtle-text">Try adjusting the filters or create a new post.</p>
         </div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
           {filtered.map((post) => (
             <PostCard
-              key={post.postId}
+              key={post._id ?? post.postId}
               post={post}
               onClick={onPostClick}
               currentUserId={currentUserId}

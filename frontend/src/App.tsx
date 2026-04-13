@@ -1,70 +1,136 @@
 import { useState } from "react";
-import PostFeed from "./components/PostFeed";
-import { PostDetail } from "./components/PostDetail";
+import { AuthProvider, useAuth } from "./context/AuthContext";
+import Home from "./pages/Home";
+import Login from "./pages/Login";
+import Register from "./pages/Register";
+import PostDetailPage from "./pages/PostDetailPage";
+import AdminPage from "./pages/AdminPage";
 import PostForm from "./components/PostForm";
-import AdminDashboard from "./components/AdminDashboard";
-import AnnouncementBanner from "./components/AnnouncementBanner";
 import "./App.css";
 
-// Simple client-side "router" using state — replace with react-router if needed
-type Page = "feed" | "create" | "detail" | "admin";
+type Page = "home" | "login" | "register" | "detail" | "create" | "admin";
 
-function App() {
-  const [page, setPage] = useState<Page>("feed");
+function AppShell() {
+  const { user, isLoading, logout } = useAuth();
+  const [page, setPage] = useState<Page>("home");
   const [selectedPostId, setSelectedPostId] = useState<string | null>(null);
 
-  // Mock auth state — Somraj will replace this with real JWT context
-  const mockUser = {
-    userId: "user-001",
-    name: "Krishna",
-    role: "student" as const,
-  };
+  const navigate = (p: string) => setPage(p as Page);
 
   const handlePostClick = (postId: string) => {
     setSelectedPostId(postId);
     setPage("detail");
   };
 
+  if (isLoading) {
+    return (
+      <div className="loading-screen">
+        <div className="spinner" />
+        <p>Loading UniVoice...</p>
+      </div>
+    );
+  }
+
   return (
-    <div className="app">
-      {/* Announcements banner — Himani's component */}
-      <AnnouncementBanner />
+    <div className="app-root">
+      {/* ── Navigation ── */}
+      <header className="navbar">
+        <div className="navbar-inner">
+          <button className="nav-logo" onClick={() => setPage("home")}>
+            UniVoice
+            <span className="nav-subtitle">· Rishihood University</span>
+          </button>
 
-      {/* Nav */}
-      <nav className="nav">
-        <span className="nav-logo">SCMS — Rishihood University</span>
-        <div className="nav-links">
-          <button onClick={() => setPage("feed")}>Posts</button>
-          <button onClick={() => setPage("create")}>+ New Post</button>
-          {mockUser.role === "admin" && (
-            <button onClick={() => setPage("admin")}>Admin</button>
-          )}
-          <span className="nav-user">{mockUser.name}</span>
+          <nav className="nav-links">
+            <button
+              className={page === "home" ? "nav-btn nav-btn-active" : "nav-btn"}
+              onClick={() => setPage("home")}
+            >
+              Posts
+            </button>
+
+            {user && (
+              <button
+                className={page === "create" ? "nav-btn nav-btn-active" : "nav-btn"}
+                onClick={() => setPage("create")}
+              >
+                + New Post
+              </button>
+            )}
+
+            {user?.role === "admin" && (
+              <button
+                className={page === "admin" ? "nav-btn nav-btn-active" : "nav-btn"}
+                onClick={() => setPage("admin")}
+              >
+                Admin
+              </button>
+            )}
+
+            {user ? (
+              <div className="nav-user-area">
+                <span className="nav-avatar" title={user.email}>
+                  {user.name.charAt(0).toUpperCase()}
+                </span>
+                <span className="nav-name">{user.name.split(" ")[0]}</span>
+                <button className="nav-btn" onClick={logout}>
+                  Sign out
+                </button>
+              </div>
+            ) : (
+              <div style={{ display: "flex", gap: 8 }}>
+                <button className="nav-btn" onClick={() => setPage("login")}>
+                  Sign in
+                </button>
+                <button className="btn-primary" onClick={() => setPage("register")}>
+                  Register
+                </button>
+              </div>
+            )}
+          </nav>
         </div>
-      </nav>
+      </header>
 
-      {/* Pages */}
-      <main className="main">
-        {page === "feed" && (
-          <PostFeed onPostClick={handlePostClick} />
-        )}
-        {page === "create" && (
-          <PostForm
-            userId={mockUser.userId}
-            onSuccess={() => setPage("feed")}
-          />
-        )}
+      {/* ── Main content ── */}
+      <main className="main-content">
+        {page === "home" && <Home onPostClick={handlePostClick} />}
+
+        {page === "login" && <Login onNavigate={navigate} />}
+
+        {page === "register" && <Register onNavigate={navigate} />}
+
         {page === "detail" && selectedPostId && (
-          <PostDetail
+          <PostDetailPage
             postId={selectedPostId}
-            currentUserId={mockUser.userId}
-            onBack={() => setPage("feed")}
+            onBack={() => setPage("home")}
           />
         )}
-        {page === "admin" && <AdminDashboard />}
+
+        {page === "create" && user && (
+          <div style={{ maxWidth: 660, margin: "36px auto", padding: "0 16px" }}>
+            <PostForm
+              userId={user._id}
+              onSuccess={() => setPage("home")}
+              onCancel={() => setPage("home")}
+            />
+          </div>
+        )}
+
+        {page === "admin" && <AdminPage />}
       </main>
+
+      {/* ── Footer ── */}
+      <footer className="footer">
+        <span>© 2026 UniVoice · Rishihood University Complaint Management System</span>
+      </footer>
     </div>
   );
 }
 
-export default App;
+export default function App() {
+  return (
+    <AuthProvider>
+      <AppShell />
+    </AuthProvider>
+  );
+}

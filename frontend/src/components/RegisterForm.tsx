@@ -1,8 +1,8 @@
 import { useState } from "react";
-import { UserRole } from "../types";
+import type { UserRole } from "../types";
 
 interface RegisterFormProps {
-  onSuccess: (token: string, user: any) => void;
+  onSuccess: (formData: unknown) => Promise<void>;
   onSwitchToLogin: () => void;
 }
 
@@ -16,47 +16,62 @@ export default function RegisterForm({ onSuccess, onSwitchToLogin }: RegisterFor
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const set = (field: string, value: any) =>
+  const set = (field: string, value: unknown) =>
     setForm((prev) => ({ ...prev, [field]: value }));
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+
+    // Client-side validation
+    if (!form.name.trim()) return setError("Full name is required");
+    if (!form.email.trim()) return setError("Email is required");
+    if (form.password.length < 8) return setError("Password must be at least 8 characters");
+    if (!form.gender) return setError("Please select a gender");
+    if (!form.department.trim()) return setError("Department is required");
+
+    if (form.role === "student") {
+      if (!form.rollNumber.trim()) return setError("Roll number is required for students");
+      if (!form.course.trim()) return setError("Course is required for students");
+    }
+    if (form.role === "faculty") {
+      if (!form.employeeId.trim()) return setError("Employee ID is required for faculty");
+      if (!form.designation.trim()) return setError("Designation is required for faculty");
+    }
+
     setLoading(true);
-
     try {
-      const res = await fetch("http://localhost:3000/api/auth/register", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
-      });
-
-      const data = await res.json();
-
-      if (!data.success) {
-        setError(data.message);
-        return;
-      }
-
-      localStorage.setItem("token", data.data.token);
-      onSuccess(data.data.token, data.data.user);
-    } catch {
-      setError("Could not connect to server.");
+      await onSuccess(form);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Registration failed");
     } finally {
       setLoading(false);
     }
   };
 
-  const inputStyle = {
+  const inputStyle: React.CSSProperties = {
     width: "100%", padding: "10px 12px", borderRadius: 8,
-    border: "0.5px solid var(--color-border-secondary)", fontSize: 14, boxSizing: "border-box" as const,
+    border: "1px solid var(--border)", fontSize: 14,
+    boxSizing: "border-box", background: "var(--surface)", color: "var(--text-primary)",
   };
-  const labelStyle = { display: "block" as const, fontSize: 13, marginBottom: 6, color: "var(--color-text-secondary)" };
-  const fieldStyle = { marginBottom: 14 };
+  const labelStyle: React.CSSProperties = {
+    display: "block", fontSize: 13, marginBottom: 6, color: "var(--text-secondary)",
+  };
+  const fieldStyle: React.CSSProperties = { marginBottom: 14 };
 
   return (
-    <div style={{ maxWidth: 480, margin: "40px auto", padding: "32px", border: "0.5px solid var(--color-border-secondary)", borderRadius: 12 }}>
-      <h2 style={{ marginBottom: 24, fontSize: 20, fontWeight: 500 }}>Create your account</h2>
+    <div style={{
+      width: "100%", maxWidth: 500, margin: "0 auto",
+      background: "var(--surface)", border: "1px solid var(--border)",
+      borderRadius: 16, padding: "36px 32px",
+      boxShadow: "var(--shadow)",
+    }}>
+      <div style={{ marginBottom: 24, textAlign: "center" }}>
+        <h2 style={{ fontSize: 20, fontWeight: 700, margin: 0 }}>Create your account</h2>
+        <p className="subtle-text" style={{ marginTop: 6, fontSize: 13 }}>
+          Join the UniVoice community
+        </p>
+      </div>
 
       <form onSubmit={handleSubmit}>
         <div style={fieldStyle}>
@@ -70,8 +85,8 @@ export default function RegisterForm({ onSuccess, onSwitchToLogin }: RegisterFor
         </div>
 
         <div style={fieldStyle}>
-          <label style={labelStyle}>Password</label>
-          <input style={inputStyle} type="password" value={form.password} onChange={(e) => set("password", e.target.value)} placeholder="Min 8 characters" required />
+          <label style={labelStyle}>Password <span className="subtle-text">(min 8 chars)</span></label>
+          <input style={inputStyle} type="password" value={form.password} onChange={(e) => set("password", e.target.value)} placeholder="••••••••" required />
         </div>
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 14 }}>
@@ -105,7 +120,6 @@ export default function RegisterForm({ onSuccess, onSwitchToLogin }: RegisterFor
           </div>
         </div>
 
-        {/* Student-specific */}
         {form.role === "student" && (
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 14 }}>
             <div>
@@ -119,7 +133,6 @@ export default function RegisterForm({ onSuccess, onSwitchToLogin }: RegisterFor
           </div>
         )}
 
-        {/* Faculty-specific */}
         {form.role === "faculty" && (
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 14 }}>
             <div>
@@ -134,23 +147,25 @@ export default function RegisterForm({ onSuccess, onSwitchToLogin }: RegisterFor
         )}
 
         {error && (
-          <div style={{ marginBottom: 16, padding: "10px 12px", background: "#FCEBEB", color: "#791F1F", borderRadius: 8, fontSize: 13 }}>
-            {error}
-          </div>
+          <div className="alert alert-error" style={{ marginBottom: 14 }}>{error}</div>
         )}
 
         <button
           type="submit"
           disabled={loading}
-          style={{ width: "100%", padding: 11, background: "#534AB7", color: "#fff", border: "none", borderRadius: 8, fontSize: 14, fontWeight: 500, cursor: loading ? "not-allowed" : "pointer", opacity: loading ? 0.7 : 1 }}
+          className="btn-primary"
+          style={{ width: "100%", padding: "12px", marginTop: 4 }}
         >
           {loading ? "Creating account..." : "Register"}
         </button>
       </form>
 
-      <p style={{ marginTop: 20, textAlign: "center", fontSize: 13, color: "var(--color-text-secondary)" }}>
+      <p style={{ marginTop: 20, textAlign: "center", fontSize: 13, color: "var(--text-secondary)" }}>
         Already have an account?{" "}
-        <button onClick={onSwitchToLogin} style={{ background: "none", border: "none", color: "#534AB7", cursor: "pointer", fontSize: 13 }}>
+        <button
+          onClick={onSwitchToLogin}
+          style={{ background: "none", border: "none", color: "var(--accent)", cursor: "pointer", fontSize: 13, fontWeight: 600 }}
+        >
           Sign in
         </button>
       </p>

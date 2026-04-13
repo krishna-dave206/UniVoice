@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Post, PostStatus } from "../types";
+import type { Post, PostStatus } from "../types";
 
 interface PostTableProps {
   posts: Post[];
@@ -10,7 +10,7 @@ interface PostTableProps {
 }
 
 const ALL_STATUSES: PostStatus[] = [
-  "open", "in_review", "in_progress", "resolved", "closed", "rejected"
+  "open", "in_review", "in_progress", "resolved", "closed", "rejected",
 ];
 
 const STATUS_COLORS: Record<PostStatus, string> = {
@@ -32,155 +32,160 @@ export default function PostTable({ posts, onStatusChange, onDelete }: PostTable
   const [search, setSearch] = useState("");
 
   const toggleSort = (key: SortKey) => {
-    if (sortKey === key) setAortAsc((a) => !a);
+    if (sortKey === key) setSortAsc((a) => !a);
     else { setSortKey(key); setSortAsc(false); }
   };
-
-  // Prevent typo — fix the function name
-  const setAortAsc = setSortAsc;
 
   const filtered = posts
     .filter((p) => !filterStatus || p.status === filterStatus)
     .filter((p) => !filterCategory || p.category === filterCategory)
     .filter((p) => !search || p.title.toLowerCase().includes(search.toLowerCase()))
     .sort((a, b) => {
-      let va: any, vb: any;
+      let va: unknown, vb: unknown;
       if (sortKey === "createdAt") { va = new Date(a.createdAt).getTime(); vb = new Date(b.createdAt).getTime(); }
       else if (sortKey === "upvotes") { va = a.upvotes; vb = b.upvotes; }
       else if (sortKey === "status") { va = a.status; vb = b.status; }
       else { va = a.priority; vb = b.priority; }
-      return sortAsc ? (va > vb ? 1 : -1) : (va < vb ? 1 : -1);
+      if (va === vb) return 0;
+      return sortAsc ? (va! > vb! ? 1 : -1) : (va! < vb! ? 1 : -1);
     });
 
   const categories = Array.from(new Set(posts.map((p) => p.category)));
 
-  const thStyle = (key: SortKey): React.CSSProperties => ({
-    padding: "10px 12px",
-    textAlign: "left",
-    fontSize: 12,
-    fontWeight: 500,
-    color: "var(--color-text-secondary)",
-    borderBottom: "0.5px solid var(--color-border-secondary)",
-    cursor: "pointer",
-    whiteSpace: "nowrap",
-    userSelect: "none",
-    background: sortKey === key ? "var(--color-background-secondary)" : "transparent",
-  });
+  const th = (key: SortKey, label: string) => (
+    <th
+      onClick={() => toggleSort(key)}
+      style={{
+        padding: "10px 14px", textAlign: "left", fontSize: 12, fontWeight: 600,
+        color: "var(--text-secondary)", borderBottom: "1px solid var(--border)",
+        cursor: "pointer", whiteSpace: "nowrap", userSelect: "none",
+        background: sortKey === key ? "var(--surface-hover)" : "transparent",
+      }}
+    >
+      {label} {sortKey === key ? (sortAsc ? "↑" : "↓") : ""}
+    </th>
+  );
 
   return (
     <div>
-      {/* Filters row */}
+      {/* Filters */}
       <div style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap" }}>
         <input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search by title..."
-          style={{ flex: 1, minWidth: 160, padding: "8px 12px", borderRadius: 8, border: "0.5px solid var(--color-border-secondary)", fontSize: 13 }}
+          style={{
+            flex: 1, minWidth: 180, padding: "8px 12px", borderRadius: 8,
+            border: "1px solid var(--border)", fontSize: 13,
+            background: "var(--surface)", color: "var(--text-primary)",
+          }}
         />
         <select
           value={filterStatus}
           onChange={(e) => setFilterStatus(e.target.value as PostStatus | "")}
-          style={{ padding: "8px 10px", borderRadius: 8, border: "0.5px solid var(--color-border-secondary)", fontSize: 13, color: "var(--color-text-primary)" }}
+          style={{ padding: "8px 10px", borderRadius: 8, border: "1px solid var(--border)", fontSize: 13, background: "var(--surface)", color: "var(--text-primary)" }}
         >
           <option value="">All statuses</option>
-          {ALL_STATUSES.map((s) => <option key={s} value={s}>{s.replace("_", " ")}</option>)}
+          {ALL_STATUSES.map((s) => (
+            <option key={s} value={s}>{s.replace(/_/g, " ")}</option>
+          ))}
         </select>
         <select
           value={filterCategory}
           onChange={(e) => setFilterCategory(e.target.value)}
-          style={{ padding: "8px 10px", borderRadius: 8, border: "0.5px solid var(--color-border-secondary)", fontSize: 13, color: "var(--color-text-primary)" }}
+          style={{ padding: "8px 10px", borderRadius: 8, border: "1px solid var(--border)", fontSize: 13, background: "var(--surface)", color: "var(--text-primary)" }}
         >
           <option value="">All categories</option>
           {categories.map((c) => <option key={c} value={c}>{c}</option>)}
         </select>
       </div>
 
-      <div style={{ fontSize: 12, color: "var(--color-text-tertiary)", marginBottom: 10 }}>
+      <div className="subtle-text" style={{ marginBottom: 10 }}>
         {filtered.length} of {posts.length} posts
       </div>
 
-      {/* Table */}
-      <div style={{ overflowX: "auto", border: "0.5px solid var(--color-border-secondary)", borderRadius: 10 }}>
+      <div style={{ overflowX: "auto", border: "1px solid var(--border)", borderRadius: 12 }}>
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
           <thead>
             <tr>
-              <th style={{ ...thStyle("createdAt"), minWidth: 220 }} onClick={() => toggleSort("createdAt")}>
-                Title {sortKey === "createdAt" ? (sortAsc ? "↑" : "↓") : ""}
-              </th>
-              <th style={thStyle("status")} onClick={() => toggleSort("status")}>
-                Status {sortKey === "status" ? (sortAsc ? "↑" : "↓") : ""}
-              </th>
-              <th style={{ padding: "10px 12px", textAlign: "left", fontSize: 12, fontWeight: 500, color: "var(--color-text-secondary)", borderBottom: "0.5px solid var(--color-border-secondary)" }}>
-                Category
-              </th>
-              <th style={thStyle("priority")} onClick={() => toggleSort("priority")}>
-                Priority {sortKey === "priority" ? (sortAsc ? "↑" : "↓") : ""}
-              </th>
-              <th style={thStyle("upvotes")} onClick={() => toggleSort("upvotes")}>
-                Votes {sortKey === "upvotes" ? (sortAsc ? "↑" : "↓") : ""}
-              </th>
-              <th style={{ padding: "10px 12px", textAlign: "left", fontSize: 12, fontWeight: 500, color: "var(--color-text-secondary)", borderBottom: "0.5px solid var(--color-border-secondary)" }}>
-                Change status
-              </th>
-              <th style={{ padding: "10px 12px", fontSize: 12, fontWeight: 500, color: "var(--color-text-secondary)", borderBottom: "0.5px solid var(--color-border-secondary)" }}>
-                Actions
-              </th>
+              {th("createdAt", "Title")}
+              {th("status", "Status")}
+              <th style={{ padding: "10px 14px", fontSize: 12, fontWeight: 600, color: "var(--text-secondary)", borderBottom: "1px solid var(--border)" }}>Category</th>
+              {th("priority", "Priority")}
+              {th("upvotes", "Votes")}
+              <th style={{ padding: "10px 14px", fontSize: 12, fontWeight: 600, color: "var(--text-secondary)", borderBottom: "1px solid var(--border)" }}>Change Status</th>
+              <th style={{ padding: "10px 14px", fontSize: 12, fontWeight: 600, color: "var(--text-secondary)", borderBottom: "1px solid var(--border)", textAlign: "center" }}>Actions</th>
             </tr>
           </thead>
           <tbody>
             {filtered.length === 0 ? (
               <tr>
-                <td colSpan={7} style={{ padding: "32px", textAlign: "center", fontSize: 13, color: "var(--color-text-secondary)" }}>
+                <td colSpan={7} style={{ padding: "40px", textAlign: "center", fontSize: 13, color: "var(--text-secondary)" }}>
                   No posts match the current filters
                 </td>
               </tr>
             ) : (
-              filtered.map((post, idx) => (
-                <tr key={post.postId} style={{ background: idx % 2 === 0 ? "transparent" : "var(--color-background-secondary)" }}>
-                  <td style={{ padding: "10px 12px" }}>
-                    <div style={{ fontSize: 13, fontWeight: 500, color: "var(--color-text-primary)", marginBottom: 2 }}>
-                      {post.title}
-                    </div>
-                    <div style={{ fontSize: 11, color: "var(--color-text-tertiary)" }}>
-                      {new Date(post.createdAt).toLocaleDateString("en-IN")}
-                      {post.isAnonymous ? " · anonymous" : ""}
-                    </div>
-                  </td>
-                  <td style={{ padding: "10px 12px" }}>
-                    <span style={{ fontSize: 11, fontWeight: 500, padding: "3px 8px", borderRadius: 4, background: STATUS_COLORS[post.status] + "18", color: STATUS_COLORS[post.status] }}>
-                      {post.status.replace("_", " ")}
-                    </span>
-                  </td>
-                  <td style={{ padding: "10px 12px", fontSize: 13, color: "var(--color-text-secondary)" }}>
-                    {post.category}
-                  </td>
-                  <td style={{ padding: "10px 12px", fontSize: 12, color: "var(--color-text-secondary)", textTransform: "capitalize" }}>
-                    {post.priority}
-                  </td>
-                  <td style={{ padding: "10px 12px", fontSize: 13, color: "var(--color-text-secondary)" }}>
-                    ▲{post.upvotes} ▼{post.downvotes}
-                  </td>
-                  <td style={{ padding: "10px 12px" }}>
-                    <select
-                      value={post.status}
-                      onChange={(e) => onStatusChange(post.postId, e.target.value as PostStatus)}
-                      style={{ padding: "5px 8px", borderRadius: 6, border: "0.5px solid var(--color-border-secondary)", fontSize: 12, color: "var(--color-text-primary)" }}
-                    >
-                      {ALL_STATUSES.map((s) => (
-                        <option key={s} value={s}>{s.replace("_", " ")}</option>
-                      ))}
-                    </select>
-                  </td>
-                  <td style={{ padding: "10px 12px", textAlign: "center" }}>
-                    <button
-                      onClick={() => { if (confirm("Delete this post?")) onDelete(post.postId); }}
-                      style={{ fontSize: 11, padding: "4px 10px", borderRadius: 6, border: "0.5px solid #F7C1C1", background: "#FCEBEB", color: "#791F1F", cursor: "pointer" }}
-                    >
-                      Delete
-                    </button>
-                  </td>
-                </tr>
-              ))
+              filtered.map((post, idx) => {
+                const pid = post._id ?? post.postId;
+                return (
+                  <tr
+                    key={pid}
+                    style={{ background: idx % 2 === 0 ? "transparent" : "var(--surface-hover)" }}
+                  >
+                    <td style={{ padding: "10px 14px" }}>
+                      <div style={{ fontSize: 13, fontWeight: 500, color: "var(--text-primary)", marginBottom: 2 }}>
+                        {post.title}
+                      </div>
+                      <div className="subtle-text" style={{ fontSize: 11 }}>
+                        {new Date(post.createdAt).toLocaleDateString("en-IN")}
+                        {post.isAnonymous ? " · anonymous" : ""}
+                      </div>
+                    </td>
+                    <td style={{ padding: "10px 14px" }}>
+                      <span
+                        style={{
+                          fontSize: 11, fontWeight: 600, padding: "3px 9px", borderRadius: 20,
+                          background: STATUS_COLORS[post.status] + "18",
+                          color: STATUS_COLORS[post.status],
+                        }}
+                      >
+                        {post.status.replace(/_/g, " ")}
+                      </span>
+                    </td>
+                    <td style={{ padding: "10px 14px", fontSize: 13, color: "var(--text-secondary)" }}>
+                      {post.category}
+                    </td>
+                    <td style={{ padding: "10px 14px", fontSize: 12, color: "var(--text-secondary)", textTransform: "capitalize" }}>
+                      {post.priority}
+                    </td>
+                    <td style={{ padding: "10px 14px", fontSize: 13, color: "var(--text-secondary)" }}>
+                      ▲{post.upvotes} ▼{post.downvotes}
+                    </td>
+                    <td style={{ padding: "10px 14px" }}>
+                      <select
+                        value={post.status}
+                        onChange={(e) => onStatusChange(pid, e.target.value as PostStatus)}
+                        style={{
+                          padding: "5px 8px", borderRadius: 6, border: "1px solid var(--border)",
+                          fontSize: 12, background: "var(--surface)", color: "var(--text-primary)",
+                        }}
+                      >
+                        {ALL_STATUSES.map((s) => (
+                          <option key={s} value={s}>{s.replace(/_/g, " ")}</option>
+                        ))}
+                      </select>
+                    </td>
+                    <td style={{ padding: "10px 14px", textAlign: "center" }}>
+                      <button
+                        onClick={() => { if (confirm("Delete this post?")) onDelete(pid); }}
+                        className="btn-danger-sm"
+                      >
+                        Delete
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })
             )}
           </tbody>
         </table>
