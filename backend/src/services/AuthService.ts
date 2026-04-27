@@ -37,9 +37,14 @@ export class AuthService {
   // REGISTER 
 
   async register(dto: RegisterDTO): Promise<{ user: IUser; token: string }> {
-    // College email check
-    if (!dto.email.includes("rishihood") && !dto.email.endsWith(".edu")) {
-      throw new Error("Only college email addresses are allowed");
+    const emailLower = dto.email.toLowerCase();
+    const isCollegeEmail =
+      emailLower.includes("rishihood") ||
+      emailLower.endsWith(".edu") ||
+      emailLower.endsWith(".edu.in") ||
+      emailLower.endsWith(".ac.in");
+    if (!isCollegeEmail && process.env.NODE_ENV === "production") {
+      throw new Error("Only college email addresses are allowed in production");
     }
 
     const exists = await UserModel.findOne({ email: dto.email });

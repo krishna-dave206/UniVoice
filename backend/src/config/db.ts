@@ -20,4 +20,10 @@ process.on("SIGINT", async () => {
   process.exit(0);
 });
 
+process.on("SIGTERM", async () => {
+  await mongoose.connection.close();
+  console.log("MongoDB connection closed (SIGTERM)");
+  process.exit(0);
+});
+
 export default mongoose;
