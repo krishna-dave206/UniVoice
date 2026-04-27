@@ -13,11 +13,11 @@ export default function Home({ onPostClick }: HomeProps) {
     <div>
       <AnnouncementBanner />
       <div style={{ maxWidth: 760, margin: "0 auto", padding: "28px 0" }}>
-        <div style={{ marginBottom: 28 }}>
-          <h1 style={{ fontSize: 24, fontWeight: 700, margin: 0, color: "var(--text-primary)" }}>
+        <div className="page-header">
+          <h1 className="page-title">
             UniVoice — Complaint Feed
           </h1>
-          <p className="subtle-text" style={{ marginTop: 6 }}>
+          <p className="page-subtitle">
             View, vote on, and track complaints from your university community
           </p>
         </div>
